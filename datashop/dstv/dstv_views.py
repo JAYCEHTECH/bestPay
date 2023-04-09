@@ -66,115 +66,31 @@ def pay_for_dstv(request):
 
 
 def send_dstv_amount(request, client_ref, account_number, amount, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/297a96656b5846ad8b00d5d41b256ea7"
+
+    payload = "{\r\n    \"Destination\": " + account_number + ",\r\n    \"Amount\": " + amount + ",\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + "\r\n}"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+    'Authorization': config("HUBTEL_API_KEY"),
+    'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/297a96656b5846ad8b00d5d41b256ea7"
-
-            payload = "{\r\n    \"Destination\": " + account_number + ",\r\n    \"Amount\": " + amount + ",\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + "\r\n}"
-            headers = {
-            'Authorization': config("HUBTEL_API_KEY"),
-            'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_airtime_transaction = models.TvTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    account_number=account_number,
-                    amount=amount,
-                    provider="DSTV",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_airtime_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_airtime_transaction = models.TvTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    account_number=account_number,
-                    amount=amount,
-                    provider="DSTV",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_airtime_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_airtime_transaction = models.TvTransaction.objects.create(
+            username=username,
+            email=email,
+            account_number=account_number,
+            amount=amount,
+            provider="DSTV",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_airtime_transaction.save()
+        return redirect('thank_you')
     else:
+        print("not 200 error")
         new_airtime_transaction = models.TvTransaction.objects.create(
             username=username,
             email=email,
@@ -185,5 +101,4 @@ def send_dstv_amount(request, client_ref, account_number, amount, username, emai
             transaction_status="Failed"
         )
         new_airtime_transaction.save()
-        print("last error")
         return redirect("failed")

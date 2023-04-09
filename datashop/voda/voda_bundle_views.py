@@ -51,114 +51,31 @@ def pay_for_50p_bundle(request):
 
 
 def send_50p_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 0.5,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVSTRDLY\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 0.5,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVSTRDLY\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="50p Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="50p Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="50p Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -166,8 +83,7 @@ def send_50p_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 ########################################### 1 cedi bundle #############################################################3
@@ -214,114 +130,31 @@ def pay_for_1_bundle(request):
 
 
 def send_1_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 1,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDR1DLY\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 1,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDR1DLY\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="1 cedi Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="1 cedi Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="1 cedi Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -329,8 +162,7 @@ def send_1_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 ########################################### 2 cedis bundle #############################################################3
@@ -377,114 +209,31 @@ def pay_for_2_bundle(request):
 
 
 def send_2_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 2,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVCHTDLY\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 2,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVCHTDLY\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="2 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="2 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="2 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -492,9 +241,9 @@ def send_2_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
+
 
 
 # ########################################## 5 cedis bundle #############################################################3
@@ -541,114 +290,31 @@ def pay_for_5_bundle(request):
 
 
 def send_5_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 5.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDR5WLY\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 5.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDR5WLY\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="5 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="5 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="5 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -656,9 +322,9 @@ def send_5_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
+
 
 ########################################### 10 cedis bundle #############################################################3
 
@@ -705,114 +371,31 @@ def pay_for_10_bundle(request):
 
 
 def send_10_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 10.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL1\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 10.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL1\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="10 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="10 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="10 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -820,9 +403,9 @@ def send_10_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
+
 
 ########################################### 20 cedis bundle #############################################################3
 
@@ -868,114 +451,31 @@ def pay_for_20_bundle(request):
 
 
 def send_20_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 20.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL2\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 20.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL2\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="20 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="20 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="20 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -983,8 +483,7 @@ def send_20_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 
@@ -1032,114 +531,31 @@ def pay_for_50_bundle(request):
 
 
 def send_50_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 50.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL3\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 50.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL3\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="50 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="50 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="50 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -1147,9 +563,9 @@ def send_50_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
+
 
 ########################################### 100 cedis bundle #############################################################3
 
@@ -1195,114 +611,31 @@ def pay_for_100_bundle(request):
 
 
 def send_100_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 100.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL4\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 100.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL4\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="100 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="100 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="100 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -1310,8 +643,7 @@ def send_100_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 ########################################### 200 cedis bundle #############################################################3
@@ -1358,114 +690,31 @@ def pay_for_200_bundle(request):
 
 
 def send_200_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 200.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL5\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 200.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL5\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="200 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="200 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="200 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -1473,8 +722,7 @@ def send_200_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 ########################################### 300 cedis bundle #############################################################3
@@ -1521,114 +769,31 @@ def pay_for_300_bundle(request):
 
 
 def send_300_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 300.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL6\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 300.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL6\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="300 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="300 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="300 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -1636,8 +801,7 @@ def send_300_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
 # ########################################## 400 cedis bundle #############################################################3
@@ -1685,114 +849,31 @@ def pay_for_400_bundle(request):
 
 
 def send_400_bundle(request, client_ref, phone_number, username, email):
-    global ref_needed
-    global status_needed
-    global content_needed
-    payment = models.AppPayment.objects.filter(reference=client_ref, payment_visited=True)
-    if payment:
-        new_intruder = models.Intruder.objects.create(
-            username=username,
-            reference=client_ref,
-            message="Payment already exists and the reference has expired. User tried using it again."
-        )
-        new_intruder.save()
-        return redirect('intruder')
+    reference = f"\"{client_ref}\""
+    url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
+
+    payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 400.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL7\"\r\n    }\r\n}\r\n"
     headers = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        "api-key": "8f56b7ea-e1d0-4ce7-ace0-162f7dc55a39"
+        'Authorization': config("HUBTEL_API_KEY"),
+        'Content-Type': 'text/plain'
     }
-    webhook_response = requests.request("GET",
-                                        "https://webhook.site/token/d53f5c53-eaba-4139-ad27-fb05b0a7be7f/requests?sorting=newest",
-                                        headers=headers)
 
-    json_webhook_response = webhook_response.json()['data']
-    txns_list = []
-    ref_list = []
-    for txn in json_webhook_response:
-        txns_list.append(txn)
-    for item in txns_list:
-        content = json.loads(item["content"])
-        ref = content["Data"]["ClientReference"]
-        status = content["Status"]
-        print(ref)
-        print(status)
-        if ref == client_ref:
-            print("========================================================")
-            print("========================================================")
-            print("=======================Ref=================================")
-            print(ref)
-            print("=====================Client Ref================================")
-            print(client_ref)
-            ref_needed = ref
-            status_needed = status
-            content_needed = content
-            break
+    response = requests.request("POST", url, headers=headers, data=payload)
 
-    if ref_needed == client_ref and status_needed == "Success":
-        momo_number = content_needed["Data"]["CustomerPhoneNumber"]
-        webhook_amount = content_needed["Data"]["Amount"]
-        payment_description = content_needed["Data"]["Description"]
-        print(f"{status_needed}--{ref_needed}--{momo_number}--{webhook_amount}--{payment_description}")
-        payment = models.AppPayment.objects.filter(username=username, reference=client_ref, payment_visited=True)
-
-        if payment:
-            new_intruder = models.Intruder.objects.create(
-                username=username,
-                reference=client_ref,
-                message="Payment already exists and the reference has expired. User tried using it again."
-            )
-            new_intruder.save()
-            return redirect("intruder")
-        else:
-            new_payment = models.AppPayment.objects.create(
-                username=username,
-                reference=client_ref,
-                payment_number=momo_number,
-                amount=webhook_amount,
-                payment_description=payment_description,
-                transaction_status=status_needed,
-                payment_visited=True,
-                message="Payment verified successfully",
-            )
-            new_payment.save()
-
-            reference = f"\"{client_ref}\""
-            url = "https://cs.hubtel.com/commissionservices/2016884/fa27127ba039455da04a2ac8a1613e00"
-
-            payload = "{\r\n    \"Destination\": " + phone_number + ",\r\n    \"Amount\": 400.0,\r\n    \"CallbackUrl\": \"https://webhook.site/9125cb31-9481-47ad-972f-d1d7765a5957\",\r\n    \"ClientReference\": " + reference + ",\r\n    \"Extradata\" : {\r\n        \"bundle\" : \"DATANVDBDL7\"\r\n    }\r\n}\r\n"
-            headers = {
-                'Authorization': config("HUBTEL_API_KEY"),
-                'Content-Type': 'text/plain'
-            }
-
-            response = requests.request("POST", url, headers=headers, data=payload)
-
-            if response.status_code == 200:
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="400 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Success"
-                )
-                new_voda_transaction.save()
-                return redirect('thank_you')
-            else:
-                print("not 200 error")
-                new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
-                    username=username,
-                    email=email,
-                    bundle_number=phone_number,
-                    offer="400 cedis Bundle",
-                    reference=client_ref,
-                    transaction_status="Failed"
-                )
-                new_voda_transaction.save()
-                return redirect("failed")
+    if response.status_code == 200:
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
+            username=username,
+            email=email,
+            bundle_number=phone_number,
+            offer="400 cedis Bundle",
+            reference=client_ref,
+            transaction_status="Success"
+        )
+        new_voda_transaction.save()
+        return redirect('thank_you')
     else:
-        new_mtn_transaction = models.VodafoneBundleTransaction.objects.create(
+        print("not 200 error")
+        new_voda_transaction = models.VodafoneBundleTransaction.objects.create(
             username=username,
             email=email,
             bundle_number=phone_number,
@@ -1800,7 +881,6 @@ def send_400_bundle(request, client_ref, phone_number, username, email):
             reference=client_ref,
             transaction_status="Failed"
         )
-        new_mtn_transaction.save()
-        print("last error")
+        new_voda_transaction.save()
         return redirect("failed")
 
